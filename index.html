@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Intelligence System</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #333; }
+        .section { margin-bottom: 30px; border: 1px solid #ddd; padding: 20px; border-radius: 5px; }
+        button, input[type="submit"] { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover, input[type="submit"]:hover { background-color: #45a049; }
+        input, textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-top: 6px; margin-bottom: 16px; }
+        #documentList, #result, #queryResult { margin-top: 20px; }
+        .document-item { padding: 10px; border: 1px solid #ddd; margin-bottom: 5px; border-radius: 3px; cursor: pointer; }
+        .document-item:hover { background-color: #f5f5f5; }
+        pre { white-space: pre-wrap; background-color: #f8f8f8; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Document Intelligence System</h1>
+    
+    <div class="section">
+        <h2>Upload Document</h2>
+        <form id="uploadForm">
+            <input type="file" id="documentFile" name="file" required>
+            <input type="text" id="userId" name="user_id" placeholder="User ID (optional)" value="default_user">
+            <input type="submit" value="Process Document">
+        </form>
+        <div id="result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Documents</h2>
+        <button id="refreshDocuments">Refresh List</button>
+        <div id="documentList"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Query Document</h2>
+        <form id="queryForm">
+            <select id="documentId" name="document_id" required>
+                <option value="">Select a document...</option>
+            </select>
+            <textarea id="query" name="query" placeholder="Enter your question about the document" required></textarea>
+            <input type="text" id="queryUserId" name="user_id" placeholder="User ID (optional)" value="default_user">
+            <input type="submit" value="Ask Question">
+        </form>
+        <div id="queryResult"></div>
+    </div>
+
+    <script>
+        // Load documents on page load
+        document.addEventListener('DOMContentLoaded', loadDocuments);
+        
+        // Setup event listeners
+        document.getElementById('refreshDocuments').addEventListener('click', loadDocuments);
+        document.getElementById('uploadForm').addEventListener('submit', uploadDocument);
+        document.getElementById('queryForm').addEventListener('submit', queryDocument);
+        
+        // Load document list
+        function loadDocuments() {
+            fetch('/documents')
+                .then(response => response.json())
+                .then(data => {
+                    const documentList = document.getElementById('documentList');
+                    const documentSelect = document.getElementById('documentId');
+                    
+                    // Clear existing options (except the placeholder)
+                    while (documentSelect.options.length > 1) {
+                        documentSelect.remove(1);
+                    }
+                    
+                    // Clear document list
+                    documentList.innerHTML = '';
+                    
+                    if (data.documents.length === 0) {
+                        documentList.innerHTML = '<p>No documents available.</p>';
+                        return;
+                    }
+                    
+                    // Add documents to list and dropdown
+                    data.documents.forEach(doc => {
+                        // Add to list
+                        const item = document.createElement('div');
+                        item.className = 'document-item';
+                        item.textContent = doc.filename;
+                        item.dataset.id = doc.document_id;
+                        documentList.appendChild(item);
+                        
+                        // Add to dropdown
+                        const option = document.createElement('option');
+                        option.value = doc.document_id;
+                        option.textContent = doc.filename;
+                        documentSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading documents:', error);
+                    document.getElementById('documentList').innerHTML = '<p>Error loading documents.</p>';
+                });
+        }
+        
+        // Upload document
+        function uploadDocument(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const fileInput = document.getElementById('documentFile');
+            const userId = document.getElementById('userId').value;
+            
+            formData.append('file', fileInput.files[0]);
+            formData.append('user_id', userId);
+            
+            document.getElementById('result').innerHTML = '<p>Processing document... This may take a moment.</p>';
+            
+            fetch('/process', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('result').innerHTML = `
+                    <h3>Document Processed Successfully</h3>
+                    <p><strong>Document ID:</strong> ${data.document_id}</p>
+                    <p><strong>Filename:</strong> ${data.filename}</p>
+                    <h4>Analysis:</h4>
+                    <pre>${data.analysis}</pre>
+                `;
+                
+                // Refresh document list
+                loadDocuments();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = '<p>Error processing document.</p>';
+            });
+        }
+        
+        // Query document
+        function queryDocument(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('document_id', document.getElementById('documentId').value);
+            formData.append('query', document.getElementById('query').value);
+            formData.append('user_id', document.getElementById('queryUserId').value);
+            
+            document.getElementById('queryResult').innerHTML = '<p>Processing query... This may take a moment.</p>';
+            
+            fetch('/direct-query', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('queryResult').innerHTML = `
+                    <h3>Query Result</h3>
+                    <p><strong>Question:</strong> ${data.question}</p>
+                    <p><strong>Answer:</strong></p>
+                    <pre>${data.answer}</pre>
+                `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('queryResult').innerHTML = '<p>Error processing query.</p>';
+            });
+        }
+    </script>
+</body>
+</html>
